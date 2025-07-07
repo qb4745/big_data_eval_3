@@ -20,18 +20,20 @@ def process_single_record(record_data, context):
         if "id_cliente" not in record_data or "fecreg" not in record_data:
             raise ValueError("Registro no contiene 'id_cliente' o 'fecreg', campos necesarios para la deduplicación.")
 
-        # Log de inicio
-        print(json.dumps({
-            "severity": "INFO",
-            "message": "Procesando registro individual",
-            "event_id": context.event_id,
-            "id_cliente": record_data.get("id_cliente")
-        }))
+        print(f"INFO: Procesando registro para cliente {record_data.get('id_cliente')}")
 
-        # 2. Limpieza de Datos
-        cliente_limpio = record_data.get('cliente', '').strip().upper().replace("'", "\\'")
-        producto_limpio = record_data.get('producto', '').strip().upper().replace("'", "\\'")
-        forma_pago_limpia = record_data.get('forma_pago', '').strip().upper().replace("'", "\\'")
+        # 2. Limpieza y preparación de valores
+        id_cliente = record_data.get("id_cliente", "")
+        cliente = record_data.get('cliente', '').strip().upper().replace("'", "\\'")
+        genero = record_data.get('genero', '')
+        id_producto = record_data.get('id_producto', '')
+        producto = record_data.get('producto', '').strip().upper().replace("'", "\\'")
+        # SOLUCIÓN: Usar .get(key, 0) para valores numéricos para evitar CAST(None)
+        precio = record_data.get("precio") or 0
+        cantidad = record_data.get("cantidad") or 0
+        monto = record_data.get("monto") or 0
+        forma_pago = record_data.get('forma_pago', '').strip().upper().replace("'", "\\'")
+        fecreg = record_data.get('fecreg')
 
         # 3. Enriquecimiento
         fecha_procesamiento_gcp = datetime.now(timezone.utc).isoformat()
@@ -42,16 +44,16 @@ def process_single_record(record_data, context):
         merge_sql = f"""
         MERGE {table_ref} T
         USING (SELECT
-            CAST('{record_data.get("id_cliente")}' AS STRING) as id_cliente,
-            '{cliente_limpio}' as cliente,
-            '{record_data.get("genero")}' as genero,
-            CAST('{record_data.get("id_producto")}' AS STRING) as id_producto,
-            '{producto_limpio}' as producto,
-            CAST({record_data.get("precio", 0)}) as FLOAT64,
-            CAST({record_data.get("cantidad", 0)}) as INT64,
-            CAST({record_data.get("monto", 0)}) as FLOAT64,
-            '{forma_pago_limpia}' as forma_pago,
-            TIMESTAMP('{record_data.get("fecreg")}') as fecreg,
+            CAST('{id_cliente}' AS STRING) as id_cliente,
+            '{cliente}' as cliente,
+            '{genero}' as genero,
+            CAST('{id_producto}' AS STRING) as id_producto,
+            '{producto}' as producto,
+            CAST({precio} AS FLOAT64) as precio,
+            CAST({cantidad} AS INT64) as cantidad,
+            CAST({monto} AS FLOAT64) as monto,
+            '{forma_pago}' as forma_pago,
+            TIMESTAMP('{fecreg}') as fecreg,
             TIMESTAMP('{fecha_procesamiento_gcp}') as fecha_procesamiento_gcp
         ) S
         ON T.id_cliente = S.id_cliente AND T.fecreg = S.fecreg
@@ -63,7 +65,7 @@ def process_single_record(record_data, context):
         # 5. Ejecutar la consulta
         job = client.query(merge_sql)
         job.result()
-        print(f"INFO: Registro {record_data.get('id_cliente')} procesado y cargado en BigQuery.")
+        print(f"INFO: Registro para cliente {id_cliente} cargado exitosamente en BigQuery.")
 
     except Exception as e:
         print(json.dumps({
@@ -74,9 +76,6 @@ def process_single_record(record_data, context):
         }))
 
 def main(event, context):
-    """
-    Función de 1ra Gen que puede manejar un único evento o un lote de eventos.
-    """
     try:
         payload_str = base64.b64decode(event['data']).decode('utf-8')
         data = json.loads(payload_str)
