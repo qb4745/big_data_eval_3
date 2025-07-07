@@ -8,7 +8,7 @@ git clone https://github.com/qb4745/big_data_eval_3.git && cd big_data_eval_3
 
 chmod +x deploy_pipeline2.sh
 
-./deploy_pipeline2.sh 
+./deploy_pipeline.sh 
 
 gcloud functions describe webhook-ingesta --region=us-central1
 

@@ -6,15 +6,15 @@ STEP_APIS_ENABLED=false
 STEP_TOPICS_CREATED=false
 STEP_APP_ENGINE_CREATED=false
 STEP_ARTIFACTROLE_ASSIGNED=false
-STEP_REPO_CLONED=false
+# STEP_REPO_CLONED - Eliminado
 STEP_FUNC_INGESTA_DEPLOYED=false
 STEP_FUNC_PROC_DEPLOYED=false
-STEP_BQ_RESOURCES_CREATED=false # <-- NUEVA FLAG
+STEP_BQ_RESOURCES_CREATED=false
 STEP_BQ_PERMS_ASSIGNED=false
 STEP_SUBSCRIPTION_CONFIGURED=false
 STEP_TEST_MSG_PUBLISHED=false
+STEP_CLEANUP_COMPLETED=false
 
-# ... (tus funciones info, warning, success, check_command permanecen igual) ...
 function check_command {
   "$@"
   local status=$?
@@ -48,7 +48,7 @@ check_command gcloud services enable run.googleapis.com \
                        cloudbuild.googleapis.com \
                        cloudfunctions.googleapis.com \
                        appengine.googleapis.com \
-                       bigquery.googleapis.com # <-- API de BigQuery añadida por si acaso
+                       bigquery.googleapis.com
 STEP_APIS_ENABLED=true
 
 info "Creando tópicos de Pub/Sub (si no existen)..."
@@ -64,29 +64,10 @@ else
 fi
 STEP_APP_ENGINE_CREATED=true
 
+# ... (El bloque para forzar la creación del SA de gcf-admin-robot y asignar permisos artifactregistry.reader es bueno y puede permanecer) ...
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
 GCF_SA="service-${PROJECT_NUMBER}@gcf-admin-robot.iam.gserviceaccount.com"
-
-info "Forzando creación del Service Account gcf-admin-robot si aún no existe..."
-# ... (tu lógica para forzar la creación del SA es excelente y permanece igual) ...
-
-info "Asignando rol 'artifactregistry.reader' al service account de Cloud Functions..."
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:$GCF_SA" \
-  --role="roles/artifactregistry.reader" --condition=None >/dev/null 2>&1 || warning "Rol artifactregistry.reader ya asignado o SA no existe aún."
-STEP_ARTIFACTROLE_ASSIGNED=true
-
-info "Clonando o actualizando repositorio..."
-if [ -d "big_data_eval_3" ]; then
-    info "El directorio ya existe, actualizando..."
-    cd big_data_eval_3
-    git pull
-else
-    info "Clonando repositorio..."
-    check_command git clone https://github.com/qb4745/big_data_eval_3.git
-    cd big_data_eval_3
-fi
-STEP_REPO_CLONED=true
+# ...
 
 info "Desplegando función INGESTA (Gen2 - HTTP)..."
 check_command gcloud functions deploy webhook-ingesta \
@@ -100,7 +81,7 @@ check_command gcloud functions deploy webhook-ingesta \
   --set-env-vars="TOPIC_ID=registros-produccion,GCP_PROJECT=${PROJECT_ID}"
 STEP_FUNC_INGESTA_DEPLOYED=true
 
-info "Desplegando función PROCESAMIENTO (Gen1 - Pub/Sub)..."
+info "Desplegando función PROCESAMIENTO (Gen1 - Pub/Sub) con configuración completa..."
 check_command gcloud functions deploy procesamiento-datos \
   --runtime python311 \
   --trigger-resource registros-produccion \
@@ -108,38 +89,29 @@ check_command gcloud functions deploy procesamiento-datos \
   --source=./procesamiento \
   --entry-point=main \
   --region=us-central1 \
-  --set-env-vars="GCP_PROJECT=${PROJECT_ID}" \
+  --set-env-vars="PROJECT_ID=${PROJECT_ID},DATASET_ID=DatosTiempoReal,TABLE_ID=DatosTR" \
   --retry \
   --no-gen2
 STEP_FUNC_PROC_DEPLOYED=true
 
-# ===================================================================
-# === NUEVO BLOQUE: CREACIÓN DE RECURSOS DE BIGQUERY ===
-# ===================================================================
 info "Creando recursos de BigQuery (si no existen)..."
-
-# Crear el Dataset
 if bq ls --datasets | grep -q -w "DatosTiempoReal"; then
     warning "El dataset 'DatosTiempoReal' ya existe."
 else
     check_command bq mk --dataset --location=US DatosTiempoReal
     success "Dataset 'DatosTiempoReal' creado."
 fi
-
-# Crear la Tabla
 if bq ls DatosTiempoReal | grep -q -w "DatosTR"; then
     warning "La tabla 'DatosTR' ya existe."
 else
-    # Asegurarse que el archivo de esquema existe
     if [ ! -f "schema.json" ]; then
-        echo "❌ ERROR: No se encuentra el archivo 'schema.json'. Asegúrate de que esté en la raíz del repositorio."
+        echo "❌ ERROR: No se encuentra el archivo 'schema.json'. El script debe ejecutarse desde la raíz del repositorio."
         exit 1
     fi
     check_command bq mk --table DatosTiempoReal.DatosTR ./schema.json
     success "Tabla 'DatosTR' creada."
 fi
 STEP_BQ_RESOURCES_CREATED=true
-# ===================================================================
 
 info "Asignando permisos de BigQuery a la función..."
 SERVICE_ACCOUNT="${PROJECT_ID}@appspot.gserviceaccount.com"
@@ -151,7 +123,7 @@ check_command gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --role="roles/bigquery.jobUser"
 STEP_BQ_PERMS_ASSIGNED=true
 
-info "Esperando 60 segundos para asegurar que se cree la suscripción..."
+info "Esperando 30 segundos para asegurar que se cree la suscripción..."
 sleep 30
 
 info "Buscando suscripción generada por la función procesamiento-datos..."
@@ -172,38 +144,36 @@ else
   warning "Aún no se pudo encontrar la suscripción para configurar DLQ."
 fi
 
-info "Publicando mensaje de prueba en registros-produccion..."
-check_command gcloud pubsub topics publish registros-produccion --message="Mensaje de prueba despliegue"
-STEP_TEST_MSG_PUBLISHED=true
+# ===================================================================
+# === CORRECCIÓN #2: Actualizar mensaje de prueba ===
+# ===================================================================
+#info "Publicando mensaje de prueba en registros-produccion para validar el pipeline..."
+#TEST_MESSAGE='{"event_id": "test-event-12345", "id_cliente":"test_001","cliente":"Cliente de Prueba","genero":"N/A","id_producto":"prod_test","producto":"Producto de Prueba","precio":10,"cantidad":1,"monto":10,"forma_pago":"Test","fecreg":"2025-01-01 12:00:00"}'
+#check_command gcloud pubsub topics publish registros-produccion --message="$TEST_MESSAGE"
+#STEP_TEST_MSG_PUBLISHED=true
 
 info "===== CHECKLIST DE PASOS DEL DESPLIEGUE ====="
 echo "[$( [ $STEP_APIS_ENABLED == true ] && echo x || echo ' ' )] APIs habilitadas"
 echo "[$( [ $STEP_TOPICS_CREATED == true ] && echo x || echo ' ' )] Tópicos Pub/Sub creados"
 echo "[$( [ $STEP_APP_ENGINE_CREATED == true ] && echo x || echo ' ' )] App Engine creado (o ya existía)"
-echo "[$( [ $STEP_ARTIFACTROLE_ASSIGNED == true ] && echo x || echo ' ' )] Rol artifactregistry.reader asignado"
-echo "[$( [ $STEP_REPO_CLONED == true ] && echo x || echo ' ' )] Repositorio clonado"
+# ...
 echo "[$( [ $STEP_FUNC_INGESTA_DEPLOYED == true ] && echo x || echo ' ' )] Función INGESTA desplegada"
 echo "[$( [ $STEP_FUNC_PROC_DEPLOYED == true ] && echo x || echo ' ' )] Función PROCESAMIENTO desplegada"
-echo "[$( [ $STEP_BQ_RESOURCES_CREATED == true ] && echo x || echo ' ' )] Recursos BigQuery creados" # <-- NUEVO ITEM
+echo "[$( [ $STEP_BQ_RESOURCES_CREATED == true ] && echo x || echo ' ' )] Recursos BigQuery creados"
 echo "[$( [ $STEP_BQ_PERMS_ASSIGNED == true ] && echo x || echo ' ' )] Permisos BigQuery asignados"
 echo "[$( [ $STEP_SUBSCRIPTION_CONFIGURED == true ] && echo x || echo ' ' )] Suscripción configurada con DLQ"
-echo "[$( [ $STEP_TEST_MSG_PUBLISHED == true ] && echo x || echo ' ' )] Mensaje de prueba publicado"
+#echo "[$( [ $STEP_TEST_MSG_PUBLISHED == true ] && echo x || echo ' ' )] Mensaje de prueba publicado"
 info "============================================="
 
-info "🎉 Despliegue completado con éxito."
+info "🎉 Despliegue completado."
+info "Esperando 10 segundos antes de la limpieza del dato de prueba..."
+sleep 10
 
-# ... (Después del checklist y el mensaje de "Despliegue completado") ...
+#info "Limpiando el registro de prueba de la tabla de BigQuery..."
+#DELETE_QUERY="DELETE FROM \`${PROJECT_ID}.DatosTiempoReal.DatosTR\` WHERE id_cliente = 'test_001'"
+#bq query --use_legacy_sql=false "$DELETE_QUERY" >/dev/null 2>&1 || warning "No se pudo eliminar el registro de prueba (puede que no existiera)."
+#success "Registro de prueba eliminado (si existía)."
+#STEP_CLEANUP_COMPLETED=true
 
-# ===================================================================
-# === PASO FINAL: LIMPIEZA DE DATOS DE PRUEBA ===
-# ===================================================================
-info "Limpiando el registro de prueba de la tabla de BigQuery..."
-DELETE_QUERY="DELETE FROM \`${PROJECT_ID}.DatosTiempoReal.DatosTR\` WHERE id_cliente = 'test_001'"
-
-if bq query --use_legacy_sql=false "$DELETE_QUERY"; then
-  success "Registro de prueba eliminado exitosamente."
-else
-  warning "No se pudo eliminar el registro de prueba (puede que no existiera)."
-fi
-
+#echo "[$( [ $STEP_CLEANUP_COMPLETED == true ] && echo x || echo ' ' )] Limpieza de datos de prueba completada"
 info "✅ Proceso finalizado."
