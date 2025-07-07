@@ -89,7 +89,7 @@ check_command gcloud functions deploy procesamiento-datos \
   --source=./procesamiento \
   --entry-point=main \
   --region=us-central1 \
-  --set-env-vars="GCP_PROJECT=${PROJECT_ID}" \
+  --set-env-vars="PROJECT_ID=${PROJECT_ID}" \
   --retry \
   --no-gen2
 STEP_FUNC_PROC_DEPLOYED=true
