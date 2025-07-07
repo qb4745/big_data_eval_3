@@ -1,6 +1,6 @@
 import os
 import json
-import functions_framework
+import base64
 from google.cloud import bigquery
 from datetime import datetime, timezone
 
@@ -9,42 +9,35 @@ PROJECT_ID = os.environ.get('GCP_PROJECT')
 DATASET_ID = 'DatosTiempoReal' # Asegúrate que este sea el nombre de tu dataset
 TABLE_ID = 'DatosTR'           # Asegúrate que este sea el nombre de tu tabla
 
-# Inicializamos el cliente de BigQuery
 client = bigquery.Client()
 
-@functions_framework.cloud_event
-def main(cloud_event):
+def main(event, context):
     """
-    Función activada por Pub/Sub para procesar, limpiar y cargar datos en BigQuery.
+    Función de 1ra Gen activada por Pub/Sub para procesar datos.
     """
     try:
-        # 1. Decodificar el mensaje de Pub/Sub
-        payload_str = cloud_event.data["message"]["data"].decode("utf-8")
+        # 1. Decodificar el mensaje de Pub/Sub (diferente en Gen1)
+        payload_str = base64.b64decode(event['data']).decode('utf-8')
         data = json.loads(payload_str)
         
         # --- LOG DE INICIO ---
         print(json.dumps({
             "severity": "INFO",
             "message": "Iniciando procesamiento de mensaje",
+            "event_id": context.event_id,
             "transaction_id": data.get("id_transaccion", "N/A")
         }))
 
-        # 2. Validación y Limpieza (Ejemplo)
+        # 2. Validación y Limpieza
         if "id_transaccion" not in data or "producto" not in data:
             raise ValueError("Payload del mensaje no contiene campos requeridos (id_transaccion, producto).")
-
-        # Limpiamos el nombre del producto
         data['producto'] = data.get('producto', '').strip().upper()
         
         # 3. Enriquecimiento
         data['fecha_procesamiento_gcp'] = datetime.now(timezone.utc).isoformat()
 
-        # 4. Construcción de la consulta MERGE para deduplicación
+        # 4. Construcción y ejecución de la consulta MERGE
         table_ref = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
-        
-        # Asumimos que la tabla ya existe con las columnas correctas
-        # NOTA: Asegúrate que las claves del dict 'data' coincidan con los nombres de las columnas en BigQuery
-        # Si tu tabla tiene columnas diferentes, ajusta los nombres aquí
         merge_sql = f"""
         MERGE `{table_ref}` T
         USING (SELECT
@@ -59,17 +52,15 @@ def main(cloud_event):
           INSERT (id_transaccion, producto, monto, forma_pago, fecha_procesamiento_gcp)
           VALUES(S.id_transaccion, S.producto, S.monto, S.forma_pago, S.fecha_procesamiento_gcp);
         """
-
-        # 5. Ejecutar la consulta
         job = client.query(merge_sql)
-        job.result()  # Espera a que el job termine
+        job.result()
 
         # --- LOG DE ÉXITO ---
         print(json.dumps({
             "severity": "INFO",
-            "message": "Registro procesado y cargado/actualizado en BigQuery exitosamente.",
-            "transaction_id": data.get("id_transaccion"),
-            "bigquery_job_id": job.job_id
+            "message": "Registro procesado exitosamente.",
+            "event_id": context.event_id,
+            "transaction_id": data.get("id_transaccion")
         }))
 
     except Exception as e:
@@ -77,8 +68,7 @@ def main(cloud_event):
         print(json.dumps({
             "severity": "ERROR",
             "message": f"Fallo crítico en el procesamiento del mensaje: {e}",
+            "event_id": context.event_id,
             "original_payload": payload_str
         }))
-        # Re-lanzar la excepción es CRUCIAL para que Pub/Sub sepa que el procesamiento falló
-        # y active la política de reintentos y la DLQ.
         raise e
