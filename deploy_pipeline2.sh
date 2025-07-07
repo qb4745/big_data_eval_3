@@ -123,7 +123,7 @@ check_command gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --role="roles/bigquery.jobUser"
 STEP_BQ_PERMS_ASSIGNED=true
 
-info "Esperando 60 segundos para asegurar que se cree la suscripción..."
+info "Esperando 30 segundos para asegurar que se cree la suscripción..."
 sleep 30
 
 info "Buscando suscripción generada por la función procesamiento-datos..."
