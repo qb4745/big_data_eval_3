@@ -1,0 +1,13 @@
+[
+  { "name": "id_cliente", "type": "STRING", "mode": "NULLABLE" },
+  { "name": "cliente", "type": "STRING", "mode": "NULLABLE" },
+  { "name": "genero", "type": "STRING", "mode": "NULLABLE" },
+  { "name": "id_producto", "type": "STRING", "mode": "NULLABLE" },
+  { "name": "producto", "type": "STRING", "mode": "NULLABLE" },
+  { "name": "precio", "type": "FLOAT64", "mode": "NULLABLE" },
+  { "name": "cantidad", "type": "INT64", "mode": "NULLABLE" },
+  { "name": "monto", "type": "FLOAT64", "mode": "NULLABLE" },
+  { "name": "forma_pago", "type": "STRING", "mode": "NULLABLE" },
+  { "name": "fecreg", "type": "TIMESTAMP", "mode": "NULLABLE" },
+  { "name": "fecha_procesamiento_gcp", "type": "TIMESTAMP", "mode": "NULLABLE" }
+]
