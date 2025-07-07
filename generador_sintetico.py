@@ -93,7 +93,7 @@ if __name__ == "__main__":
             print(f"✅ Publicado [Evento: {nuevo_registro['event_id']}] [Hora: {nuevo_registro['fecreg']}] "
                   f"| Detalle: '{nuevo_registro['cliente']}' compró {nuevo_registro['cantidad']} de '{nuevo_registro['producto']}'.")
             
-            time.sleep(random.uniform(0.5, 2.0))
+            time.sleep(random.uniform(3.0, 5.0))
             
     except KeyboardInterrupt:
         print("\n🛑 Deteniendo el generador de datos.")
