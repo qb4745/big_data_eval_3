@@ -18,7 +18,6 @@ publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(project_id, topic_id)
 
 # --- DATOS DE MUESTRA AMPLIADOS Y REALISTAS ---
-# Hemos actualizado estas listas con la data de tu tabla de BigQuery para una simulación de alta fidelidad.
 CLIENTES = [
     (1, "RAUL OPAZO", "H"),
     (2, "ALEJANDRO PÉREZ", "H"),
@@ -28,7 +27,6 @@ CLIENTES = [
     (8, "PAOLA ROJAS", "M"),
     (9, "MARLÉN SOTO", "M"),
     (10, "LUISA TORRES", "M"),
-    # Añadimos algunos clientes ficticios más para mayor variedad
     (11, "SOFIA VERGARA", "M"),
     (12, "JAVIER BARDEM", "H"),
     (13, "ISABEL ALLENDE", "M"),
@@ -60,9 +58,8 @@ def crear_registro_sintetico():
     precio_final = round(precio_base * random.uniform(0.95, 1.05), 2)
     monto_total = round(precio_final * cantidad, 2)
     
-    # El payload debe coincidir exactamente con el esquema de la tabla de destino.
     registro = {
-        "event_id": str(uuid.uuid4()),  # ID único para la idempotencia y deduplicación
+        "event_id": str(uuid.uuid4()),
         "id_cliente": id_cliente,
         "cliente": cliente,
         "genero": genero,
@@ -70,16 +67,16 @@ def crear_registro_sintetico():
         "producto": producto,
         "precio": precio_final,
         "cantidad": cantidad,
-        "monto": monto_total, # Aseguramos que el campo se llame 'monto'
+        "monto": monto_total,
         "forma_pago": random.choice(FORMAS_PAGO),
-        "fecreg": time.strftime('%Y-%m-%d %H:%M:%S') # Fecha y hora del evento
+        "fecreg": time.strftime('%Y-%m-%d %H:%M:%S')
     }
     
     return registro
 
 # --- BUCLE PRINCIPAL ---
 if __name__ == "__main__":
-    print(f"🚀 Iniciando generador de datos sintéticos (v2.0 - Datos ampliados).")
+    print(f"🚀 Iniciando generador de datos sintéticos (v2.1 - Salida mejorada).")
     print(f"Publicando en el tópico: {topic_path}")
     print("Presiona Ctrl+C para detener.")
 
@@ -91,7 +88,10 @@ if __name__ == "__main__":
             future = publisher.publish(topic_path, message_bytes)
             future.result()
             
-            print(f"✅ Publicado: '{nuevo_registro['cliente']}' compró {nuevo_registro['cantidad']} de '{nuevo_registro['producto']}'.")
+            # --- LÍNEA MODIFICADA ---
+            # Añadimos el event_id y fecreg al mensaje de la consola para mayor visibilidad.
+            print(f"✅ Publicado [Evento: {nuevo_registro['event_id']}] [Hora: {nuevo_registro['fecreg']}] "
+                  f"| Detalle: '{nuevo_registro['cliente']}' compró {nuevo_registro['cantidad']} de '{nuevo_registro['producto']}'.")
             
             time.sleep(random.uniform(0.5, 2.0))
             
