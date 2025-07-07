@@ -123,17 +123,25 @@ check_command gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --role="roles/bigquery.jobUser"
 STEP_BQ_PERMS_ASSIGNED=true
 
-info "Esperando 30 segundos para asegurar que se cree la suscripción..."
+info "Esperando 60 segundos para asegurar que se cree la suscripción..."
 sleep 30
 
-info "Buscando y configurando suscripción de la función de procesamiento..."
+info "Buscando suscripción generada por la función procesamiento-datos..."
 SUBSCRIPTION_ID=$(gcloud pubsub topics list-subscriptions registros-produccion --format="value(name)" | grep procesamiento-datos || true)
+
+if [[ -z "$SUBSCRIPTION_ID" ]]; then
+  warning "No se pudo encontrar automáticamente la suscripción. Usando nombre conocido manualmente."
+  SUBSCRIPTION_ID="projects/${PROJECT_ID}/subscriptions/gcf-procesamiento-datos-us-central1-registros-produccion"
+fi
+
 if [[ -n "$SUBSCRIPTION_ID" ]]; then
-  check_command gcloud pubsub subscriptions update "$SUBSCRIPTION_ID" --dead-letter-topic=registros-dlq --max-delivery-attempts=5
+  check_command gcloud pubsub subscriptions update "$SUBSCRIPTION_ID" \
+    --dead-letter-topic=registros-dlq \
+    --max-delivery-attempts=5
   success "DLQ configurada correctamente para la suscripción."
   STEP_SUBSCRIPTION_CONFIGURED=true
 else
-  warning "No se pudo encontrar la suscripción para configurar DLQ. Por favor, hazlo manualmente."
+  warning "Aún no se pudo encontrar la suscripción para configurar DLQ."
 fi
 
 info "Publicando mensaje de prueba en registros-produccion para validar el pipeline..."
