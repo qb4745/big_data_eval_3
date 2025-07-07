@@ -1,0 +1,176 @@
+  uri: https://webhook-ingesta-2qpfec7f5a-uc.a.run.app
+state: ACTIVE
+updateTime: '2025-07-07T05:29:06.669151351Z'
+url: https://us-central1-qwiklabs-gcp-01-a512ed24676a.cloudfunctions.net/webhook-ingesta
+
+
+git clone https://github.com/qb4745/big_data_eval_3.git && cd big_data_eval_3
+
+chmod +x deploy_pipeline2.sh
+
+./deploy_pipeline2.sh 
+
+gcloud functions describe webhook-ingesta --region=us-central1
+
+pip install google-cloud-pubsub
+
+export PROJECT_ID=$(gcloud config get-value project)
+export TOPIC_ID="registros-produccion"
+
+python3 generador_sintetico.py
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+gcloud config set project qwiklabs-gcp-02-30f4f72990e4
+
+gcloud config set project $(gcloud config get-value project)
+
+
+gcloud services enable run.googleapis.com \
+                       pubsub.googleapis.com \
+                       iam.googleapis.com \
+                       cloudbuild.googleapis.com
+
+gcloud pubsub topics create registros-produccion
+
+gcloud pubsub topics create registros-dlq
+
+
+git clone https://github.com/qb4745/big_data_eval_3.git && cd ./big_data_eval_3
+
+gcloud functions deploy webhook-ingesta \
+  --gen2 \
+  --runtime=python311 \
+  --trigger-http \
+  --source=./ingesta \
+  --entry-point=main \
+  --region=us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars="TOPIC_ID=registros-produccion,GCP_PROJECT=${PROJECT_ID}"
+
+
+gcloud functions deploy procesamiento-datos \
+  --runtime python311 \
+  --trigger-resource registros-produccion \
+  --trigger-event google.pubsub.topic.publish \
+  --source=./procesamiento \
+  --entry-point=main \
+  --region=us-central1 \
+  --set-env-vars="GCP_PROJECT=$(gcloud config get-value project)" \
+  --retry \
+  --no-gen2
+
+
+gcloud run services add-iam-policy-binding webhook-ingesta \
+  --member="allUsers" \
+  --role="roles/run.invoker" \
+  --region=us-central1
+
+-----
+
+
+gcloud services enable bigquery.googleapis.com
+
+
+
+
+
+
+
+
+
+
+
+
+
+resource.type="cloud_run_revision"
+resource.labels.service_name="webhook-ingesta"
+jsonPayload.message="Mensaje recibido y publicado en Pub/Sub exitosamente"
+
+
+gcloud pubsub topics add-iam-policy-binding registros-produccion \
+  --member="serviceAccount:225434360156-compute@developer.gserviceaccount.com" \
+  --role="roles/pubsub.publisher"
+
+
+
+curl -X POST "https://webhook-ingesta-44nliyqxsq-uc.a.run.app" \
+  -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
+  -H "Content-Type: application/json" \
+  -d '{"id_transaccion": "TXN_001", "producto": "Servicio de Consultoría", "monto": 250.75, "zona": "NORTE"}'
+
+
+
+resource.type="cloud_run_revision"
+resource.labels.service_name="webhook-ingesta"
+jsonPayload.message="Mensaje recibido y publicado en Pub/Sub exitosamente"
+
+
+gcloud pubsub subscriptions create mi-suscripcion-de-prueba --topic=registros-produccion
+
+
+gcloud pubsub subscriptions pull mi-suscripcion-de-prueba --auto-ack
+
+
+gcloud pubsub subscriptions delete mi-suscripcion-de-prueba
+
+
+
+----
+
+bq --location=US mk --dataset DatosTiempoReal
+
+
