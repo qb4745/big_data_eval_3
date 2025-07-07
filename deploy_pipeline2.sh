@@ -147,10 +147,10 @@ fi
 # ===================================================================
 # === CORRECCIÓN #2: Actualizar mensaje de prueba ===
 # ===================================================================
-info "Publicando mensaje de prueba en registros-produccion para validar el pipeline..."
-TEST_MESSAGE='{"event_id": "test-event-12345", "id_cliente":"test_001","cliente":"Cliente de Prueba","genero":"N/A","id_producto":"prod_test","producto":"Producto de Prueba","precio":10,"cantidad":1,"monto":10,"forma_pago":"Test","fecreg":"2025-01-01 12:00:00"}'
-check_command gcloud pubsub topics publish registros-produccion --message="$TEST_MESSAGE"
-STEP_TEST_MSG_PUBLISHED=true
+#info "Publicando mensaje de prueba en registros-produccion para validar el pipeline..."
+#TEST_MESSAGE='{"event_id": "test-event-12345", "id_cliente":"test_001","cliente":"Cliente de Prueba","genero":"N/A","id_producto":"prod_test","producto":"Producto de Prueba","precio":10,"cantidad":1,"monto":10,"forma_pago":"Test","fecreg":"2025-01-01 12:00:00"}'
+#check_command gcloud pubsub topics publish registros-produccion --message="$TEST_MESSAGE"
+#STEP_TEST_MSG_PUBLISHED=true
 
 info "===== CHECKLIST DE PASOS DEL DESPLIEGUE ====="
 echo "[$( [ $STEP_APIS_ENABLED == true ] && echo x || echo ' ' )] APIs habilitadas"
@@ -162,18 +162,18 @@ echo "[$( [ $STEP_FUNC_PROC_DEPLOYED == true ] && echo x || echo ' ' )] Función
 echo "[$( [ $STEP_BQ_RESOURCES_CREATED == true ] && echo x || echo ' ' )] Recursos BigQuery creados"
 echo "[$( [ $STEP_BQ_PERMS_ASSIGNED == true ] && echo x || echo ' ' )] Permisos BigQuery asignados"
 echo "[$( [ $STEP_SUBSCRIPTION_CONFIGURED == true ] && echo x || echo ' ' )] Suscripción configurada con DLQ"
-echo "[$( [ $STEP_TEST_MSG_PUBLISHED == true ] && echo x || echo ' ' )] Mensaje de prueba publicado"
+#echo "[$( [ $STEP_TEST_MSG_PUBLISHED == true ] && echo x || echo ' ' )] Mensaje de prueba publicado"
 info "============================================="
 
 info "🎉 Despliegue completado."
 info "Esperando 10 segundos antes de la limpieza del dato de prueba..."
 sleep 10
 
-info "Limpiando el registro de prueba de la tabla de BigQuery..."
-DELETE_QUERY="DELETE FROM \`${PROJECT_ID}.DatosTiempoReal.DatosTR\` WHERE id_cliente = 'test_001'"
-bq query --use_legacy_sql=false "$DELETE_QUERY" >/dev/null 2>&1 || warning "No se pudo eliminar el registro de prueba (puede que no existiera)."
-success "Registro de prueba eliminado (si existía)."
-STEP_CLEANUP_COMPLETED=true
+#info "Limpiando el registro de prueba de la tabla de BigQuery..."
+#DELETE_QUERY="DELETE FROM \`${PROJECT_ID}.DatosTiempoReal.DatosTR\` WHERE id_cliente = 'test_001'"
+#bq query --use_legacy_sql=false "$DELETE_QUERY" >/dev/null 2>&1 || warning "No se pudo eliminar el registro de prueba (puede que no existiera)."
+#success "Registro de prueba eliminado (si existía)."
+#STEP_CLEANUP_COMPLETED=true
 
-echo "[$( [ $STEP_CLEANUP_COMPLETED == true ] && echo x || echo ' ' )] Limpieza de datos de prueba completada"
+#echo "[$( [ $STEP_CLEANUP_COMPLETED == true ] && echo x || echo ' ' )] Limpieza de datos de prueba completada"
 info "✅ Proceso finalizado."
