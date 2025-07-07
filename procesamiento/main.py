@@ -22,8 +22,9 @@ def process_record(record_data):
     # 1. Validación de la clave de deduplicación
     if "event_id" not in record_data:
         # Ya no lanzamos un error crítico, solo lo registramos y lo saltamos.
-        print(f"WARNING: Registro omitido por no contener 'event_id'. Contenido: {record_data}")
-        return None
+        #print(f"WARNING: Registro omitido por no contener 'event_id'. Contenido: {record_data}")
+        #return None
+        raise ValueError(f"ERROR: Falta 'event_id' en el registro: {record_data}")
 
     # 2. Limpieza y preparación de la fila
     try:
