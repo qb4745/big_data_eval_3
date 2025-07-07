@@ -151,11 +151,16 @@ check_command gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --role="roles/bigquery.jobUser"
 STEP_BQ_PERMS_ASSIGNED=true
 
-info "Esperando 30 segundos para asegurar que se cree la suscripción..."
+info "Esperando 60 segundos para asegurar que se cree la suscripción..."
 sleep 30
 
 info "Buscando suscripción generada por la función procesamiento-datos..."
 SUBSCRIPTION_ID=$(gcloud pubsub topics list-subscriptions registros-produccion --format="value(name)" | grep procesamiento-datos || true)
+
+if [[ -z "$SUBSCRIPTION_ID" ]]; then
+  warning "No se pudo encontrar automáticamente la suscripción. Usando nombre conocido manualmente."
+  SUBSCRIPTION_ID="projects/${PROJECT_ID}/subscriptions/gcf-procesamiento-datos-us-central1-registros-produccion"
+fi
 
 if [[ -n "$SUBSCRIPTION_ID" ]]; then
   check_command gcloud pubsub subscriptions update "$SUBSCRIPTION_ID" \
@@ -164,11 +169,11 @@ if [[ -n "$SUBSCRIPTION_ID" ]]; then
   success "DLQ configurada correctamente para la suscripción."
   STEP_SUBSCRIPTION_CONFIGURED=true
 else
-  warning "No se pudo encontrar la suscripción para configurar DLQ. Por favor, hazlo manualmente."
+  warning "Aún no se pudo encontrar la suscripción para configurar DLQ."
 fi
 
 info "Publicando mensaje de prueba en registros-produccion..."
-check_command gcloud pubsub topics publish registros-produccion --message='{"id_cliente":"test_001","cliente":"Cliente de Prueba","genero":"N/A","id_producto":"prod_test","producto":"Producto de Prueba","precio":10,"cantidad":1,"monto":10,"forma_pago":"Test","fecreg":"2025-01-01T12:00:00Z"}'
+check_command gcloud pubsub topics publish registros-produccion --message="Mensaje de prueba despliegue"
 STEP_TEST_MSG_PUBLISHED=true
 
 info "===== CHECKLIST DE PASOS DEL DESPLIEGUE ====="
@@ -186,3 +191,19 @@ echo "[$( [ $STEP_TEST_MSG_PUBLISHED == true ] && echo x || echo ' ' )] Mensaje 
 info "============================================="
 
 info "🎉 Despliegue completado con éxito."
+
+# ... (Después del checklist y el mensaje de "Despliegue completado") ...
+
+# ===================================================================
+# === PASO FINAL: LIMPIEZA DE DATOS DE PRUEBA ===
+# ===================================================================
+info "Limpiando el registro de prueba de la tabla de BigQuery..."
+DELETE_QUERY="DELETE FROM \`${PROJECT_ID}.DatosTiempoReal.DatosTR\` WHERE id_cliente = 'test_001'"
+
+if bq query --use_legacy_sql=false "$DELETE_QUERY"; then
+  success "Registro de prueba eliminado exitosamente."
+else
+  warning "No se pudo eliminar el registro de prueba (puede que no existiera)."
+fi
+
+info "✅ Proceso finalizado."
