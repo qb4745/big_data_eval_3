@@ -81,7 +81,7 @@ check_command gcloud functions deploy webhook-ingesta \
   --set-env-vars="TOPIC_ID=registros-produccion,GCP_PROJECT=${PROJECT_ID}"
 STEP_FUNC_INGESTA_DEPLOYED=true
 
-info "Desplegando función PROCESAMIENTO (Gen1 - Pub/Sub)..."
+info "Desplegando función PROCESAMIENTO (Gen1 - Pub/Sub) con configuración completa..."
 check_command gcloud functions deploy procesamiento-datos \
   --runtime python311 \
   --trigger-resource registros-produccion \
@@ -89,7 +89,7 @@ check_command gcloud functions deploy procesamiento-datos \
   --source=./procesamiento \
   --entry-point=main \
   --region=us-central1 \
-  --set-env-vars="PROJECT_ID=${PROJECT_ID}" \
+  --set-env-vars="PROJECT_ID=${PROJECT_ID},DATASET_ID=DatosTiempoReal,TABLE_ID=DatosTR" \
   --retry \
   --no-gen2
 STEP_FUNC_PROC_DEPLOYED=true
@@ -144,8 +144,12 @@ else
   warning "Aún no se pudo encontrar la suscripción para configurar DLQ."
 fi
 
+# ===================================================================
+# === CORRECCIÓN #2: Actualizar mensaje de prueba ===
+# ===================================================================
 info "Publicando mensaje de prueba en registros-produccion para validar el pipeline..."
-check_command gcloud pubsub topics publish registros-produccion --message='{"id_cliente":"test_001","cliente":"Cliente de Prueba","genero":"N/A","id_producto":"prod_test","producto":"Producto de Prueba","precio":10,"cantidad":1,"monto":10,"forma_pago":"Test","fecreg":"2025-01-01T12:00:00Z"}'
+TEST_MESSAGE='{"event_id": "test-event-12345", "id_cliente":"test_001","cliente":"Cliente de Prueba","genero":"N/A","id_producto":"prod_test","producto":"Producto de Prueba","precio":10,"cantidad":1,"monto":10,"forma_pago":"Test","fecreg":"2025-01-01 12:00:00"}'
+check_command gcloud pubsub topics publish registros-produccion --message="$TEST_MESSAGE"
 STEP_TEST_MSG_PUBLISHED=true
 
 info "===== CHECKLIST DE PASOS DEL DESPLIEGUE ====="
