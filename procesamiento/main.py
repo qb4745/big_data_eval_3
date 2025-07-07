@@ -1,55 +1,84 @@
 import os
 import json
-import base64
-from datetime import datetime
 import functions_framework
 from google.cloud import bigquery
+from datetime import datetime, timezone
 
+# --- Configuración ---
 PROJECT_ID = os.environ.get('GCP_PROJECT')
-DATASET_ID = "DatosTiempoReal"
-TABLE_ID = "DatosTR"
+DATASET_ID = 'DatosTiempoReal' # Asegúrate que este sea el nombre de tu dataset
+TABLE_ID = 'DatosTR'           # Asegúrate que este sea el nombre de tu tabla
 
+# Inicializamos el cliente de BigQuery
 client = bigquery.Client()
-table_ref = client.dataset(DATASET_ID).table(TABLE_ID)
 
 @functions_framework.cloud_event
 def main(cloud_event):
+    """
+    Función activada por Pub/Sub para procesar, limpiar y cargar datos en BigQuery.
+    """
     try:
-        payload_str = base64.b64decode(cloud_event.data["message"]["data"]).decode("utf-8")
+        # 1. Decodificar el mensaje de Pub/Sub
+        payload_str = cloud_event.data["message"]["data"].decode("utf-8")
         data = json.loads(payload_str)
         
-        print(f"Procesando mensaje con ID de evento: {cloud_event['id']}")
+        # --- LOG DE INICIO ---
+        print(json.dumps({
+            "severity": "INFO",
+            "message": "Iniciando procesamiento de mensaje",
+            "transaction_id": data.get("id_transaccion", "N/A")
+        }))
 
-        required_fields = ["id_cliente", "id_producto", "fecreg"]
-        if not all(field in data for field in required_fields):
-            raise ValueError("Faltan campos requeridos en el mensaje.")
+        # 2. Validación y Limpieza (Ejemplo)
+        if "id_transaccion" not in data or "producto" not in data:
+            raise ValueError("Payload del mensaje no contiene campos requeridos (id_transaccion, producto).")
 
-        precio_float = float(data.get("precio", "0").strip())
-        cantidad_int = int(data.get("cantidad", 0))
-        monto_float = float(data.get("monto", "0").strip())
+        # Limpiamos el nombre del producto
+        data['producto'] = data.get('producto', '').strip().upper()
         
-        cliente_clean = data.get('cliente', '').strip()
-        producto_clean = data.get('producto', '').strip()
-        forma_pago_clean = data.get('forma_pago', '').upper().strip()
-        fecha_procesamiento_gcp_iso = datetime.utcnow().isoformat()
+        # 3. Enriquecimiento
+        data['fecha_procesamiento_gcp'] = datetime.now(timezone.utc).isoformat()
+
+        # 4. Construcción de la consulta MERGE para deduplicación
+        table_ref = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
         
+        # Asumimos que la tabla ya existe con las columnas correctas
+        # NOTA: Asegúrate que las claves del dict 'data' coincidan con los nombres de las columnas en BigQuery
+        # Si tu tabla tiene columnas diferentes, ajusta los nombres aquí
         merge_sql = f"""
-        MERGE `{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}` T
-        USING (SELECT CAST("{data.get('id_cliente')}" AS STRING) as id_cliente, CAST("{data.get('id_producto')}" AS STRING) as id_producto, CAST("{data.get('fecreg')}" AS TIMESTAMP) as fecreg) S
-        ON T.id_cliente = S.id_cliente AND T.id_producto = S.id_producto AND T.fecreg = S.fecreg
+        MERGE `{table_ref}` T
+        USING (SELECT
+            CAST('{data.get("id_transaccion")}' AS STRING) as id_transaccion,
+            '{data.get("producto")}' as producto,
+            CAST({data.get("monto", 0)}) as monto,
+            '{data.get("forma_pago")}' as forma_pago,
+            TIMESTAMP('{data.get("fecha_procesamiento_gcp")}') as fecha_procesamiento_gcp
+        ) S
+        ON T.id_transaccion = S.id_transaccion
         WHEN NOT MATCHED THEN
-          INSERT (id_cliente, cliente, genero, id_producto, producto, precio, cantidad, monto, forma_pago, fecreg, fecha_procesamiento_gcp)
-          VALUES(
-            "{data.get('id_cliente')}", "{cliente_clean}", "{data.get('genero', '')}", "{data.get('id_producto')}",
-            "{producto_clean}", {precio_float}, {cantidad_int}, {monto_float},
-            "{forma_pago_clean}", CAST("{data.get('fecreg')}" AS TIMESTAMP), CAST("{fecha_procesamiento_gcp_iso}" AS TIMESTAMP)
-          )
+          INSERT (id_transaccion, producto, monto, forma_pago, fecha_procesamiento_gcp)
+          VALUES(S.id_transaccion, S.producto, S.monto, S.forma_pago, S.fecha_procesamiento_gcp);
         """
-        job = client.query(merge_sql)
-        job.result()
 
-        print(f"Éxito: El mensaje fue procesado y cargado/fusionado en BigQuery. Job ID: {job.job_id}")
+        # 5. Ejecutar la consulta
+        job = client.query(merge_sql)
+        job.result()  # Espera a que el job termine
+
+        # --- LOG DE ÉXITO ---
+        print(json.dumps({
+            "severity": "INFO",
+            "message": "Registro procesado y cargado/actualizado en BigQuery exitosamente.",
+            "transaction_id": data.get("id_transaccion"),
+            "bigquery_job_id": job.job_id
+        }))
 
     except Exception as e:
-        print(f"ERROR al procesar el mensaje: {e}")
+        # --- LOG DE ERROR CRÍTICO ---
+        print(json.dumps({
+            "severity": "ERROR",
+            "message": f"Fallo crítico en el procesamiento del mensaje: {e}",
+            "original_payload": payload_str
+        }))
+        # Re-lanzar la excepción es CRUCIAL para que Pub/Sub sepa que el procesamiento falló
+        # y active la política de reintentos y la DLQ.
         raise e
